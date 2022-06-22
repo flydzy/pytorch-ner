@@ -1,11 +1,6 @@
-from cProfile import label
-from pickletools import optimize
 import sys
-from this import s
-from turtle import shape
-from numpy import argmax
-
 import torch
+from zmq import device
 sys.path.append(r'..')
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -14,58 +9,58 @@ import torch.nn.functional as F
 from Advtrans.models.lstm import LSTM
 from Advtrans.preprocess.preprocess import build_iterator
 import torch.optim as optim 
-import time
-train_iter = build_iterator('data/en/eng.train', batch_size=32)
-valid_iter = build_iterator('data/en/eng.testa', batch_size=32)
-test_iter = build_iterator('data/en/eng.testb', batch_size=16)
+import numpy as np
+from seqeval.metrics import f1_score, classification_report
+
+
+train_iter = build_iterator('data/en/eng.train', batch_size=32, device='cpu')
+valid_iter = build_iterator('data/en/eng.testa', batch_size=32, device='cpu')
+test_iter = build_iterator('data/en/eng.testb', batch_size=32, device='cpu')
+
+
 # vocab_size 
 word2idx = train_iter.dataset.fields['sent'].vocab.stoi
 label2idx = train_iter.dataset.fields['label'].vocab.stoi
 vocab_size = len(word2idx)
-emb_size = 60
-hidden_size = 60
+
+hidden_size = 300
 out_size = len(label2idx)
-epoches = 5
+epoches = 10
 print(vocab_size, out_size,label2idx)
+embedding = train_iter.dataset.fields['sent'].vocab.vectors
+emb_size = embedding.shape[1]
+
+model = LSTM(vocab_size, emb_size, hidden_size, out_size,embedding)
+optimizer = optim.Adam(model.parameters(),lr=0.01)
+loss_fuc = nn.CrossEntropyLoss(ignore_index=1)
 
 
-model = LSTM(vocab_size, emb_size, hidden_size, out_size)
-optimizer = optim.Adam(model.parameters(), lr=0.05, weight_decay=0.005)
-loss_fuc = nn.CrossEntropyLoss()
-
-def cal_loss(logits, targets, label2id):
-    """计算损失
-    参数:
-        logits: [B, L, out_size]
-        targets: [B, L]
-        lengths: [B]
+def align_predictions(predictions, labels, id2labels):
     """
-    PAD = label2id.get('<pad>')
-    assert PAD is not None
-
-    mask = (targets != PAD)  # [B, L]
-    targets = targets[mask]
-    out_size = logits.size(2)
-    logits = logits.masked_select(
-        mask.unsqueeze(2).expand(-1, -1, out_size)
-    ).contiguous().view(-1, out_size)
-
-    assert logits.size(0) == targets.size(0)
-    loss = F.cross_entropy(logits, targets)
-
-    return loss
-
+    predictions: [Batch Length Class]
+    labels:[Batch Class]
+    """
+    preds = torch.argmax(predictions, dim=2)  # [B L]
+    batch_size, seq_length = preds.shape
+    labels_list, preds_list = [], []
+    for batch_idx in range(batch_size):
+        example_labels, example_preds = [], []
+        for seq_idx in range(seq_length):
+            if labels[batch_idx, seq_idx] != 1:
+                example_labels.append(id2labels[labels[batch_idx][seq_idx]])
+                example_preds.append(id2labels[preds[batch_idx][seq_idx]])
+        labels_list.append(example_labels)
+        preds_list.append(example_preds)
+    
+    return preds_list, labels_list
 
 loss_list = []
 for epoch in range(epoches):
     for step,batch in enumerate(train_iter):
-        labels = batch.label  # [B L]
-        # PAD = label2idx.get('<pad>')
-        # mask = (labels != PAD)
-        # labels = 
-        output = model(batch.sent) # [B L O]
-        loss = cal_loss(output, labels, label2idx)
-        # loss = loss_fuc(output.float(), batch.label.float())
+        labels = batch.label
+        labels = labels.view(labels.shape[0]*labels.shape[1])
+        output = model(batch.sent[0], batch.sent[1]).view(-1, out_size) # [B L N]
+        loss = loss_fuc(output, labels)
         
         optimizer.zero_grad()
         loss.backward()
@@ -75,65 +70,15 @@ for epoch in range(epoches):
             print("Epoch [{}/{}], Step [{}/{}], loss:{:.4f}".format(epoch+1,epoches, step,len(train_iter),loss.item()))
     loss_list.append(loss.item())
     # 验证集评估准确率
+    id2labels = train_iter.dataset.fields['label'].vocab.itos
+    preds_list,labels_list = [],[]
     with torch.no_grad():
-        correct = 0
-        total = 0
-        for batch_valid in valid_iter:
-            labels = batch_valid.label
-            PAD = label2idx.get('<pad>')
-            UNK = label2idx.get('<unk>')
-            mask1 = torch.tensor(labels != PAD)
-            mask2 = torch.tensor(labels != UNK)
-            maks3 = torch.tensor(label != 2)
-            mask = ((mask1 == mask2)== maks3)
-            labels = torch.masked_select(labels, mask)
-            output = model(batch_valid.sent)
-            output = torch.argmax(output, dim=2)
-            output = torch.masked_select(output, mask)
-            correct += output.eq(labels).sum().item()
-            total += len(labels)
-        print("The Accuracy of Valid:{}".format(correct/total))
+        for batch in valid_iter:
+            labels = batch.label
+            preds = model(batch.sent[0], batch.sent[1])
+            p, l = align_predictions(preds, labels, id2labels)
+            # print(p, l)
+            preds_list.extend(p)
+            labels_list.extend(l)
 
-
-
-sns.lineplot(x=range(len(loss_list)),y=loss_list, markers=True)
-plt.savefig("lstm_loss.png")
-# 测试集
-# with torch.no_grad():
-#     correct = 0
-#     total = 0
-#     for batch_test in test_iter:
-#         labels = batch_test.label
-#         PAD = label2idx.get('<pad>')
-#         UNK = label2idx.get('<unk>')
-#         mask1 = torch.tensor(labels != PAD)
-#         mask2 = torch.tensor(labels != UNK)
-#         mask = mask1 == mask2
-#         labels = torch.masked_select(labels, mask)
-#         output = model(batch_test.sent)
-#         output = torch.argmax(output, dim=2)
-#         output = torch.masked_select(output, mask)
-#         correct += output.eq(labels).sum().item()
-#         total += len(labels)
-#     print("The Accuracy of Test:{}".format(correct/total))
-
-# case
-batch = next(iter(test_iter))
-# labels = test_iter.dataset.examples[0].label
-sent = batch.sent[5]
-sent = sent.unsqueeze(0)
-label = batch.label[5]
-output = model(sent)
-output = torch.argmax(output,dim=-1)
-
-id2label = train_iter.dataset.fields['label'].vocab.itos
-print(id2label)
-predict = []
-target = []
-print(output.squeeze_(0))
-print(label)
-for pre,tar in zip(output.squeeze_(0), label):
-    predict.extend([id2label[pre]])
-    target.extend([id2label[tar]])
-print(predict)
-print(target)
+    print(classification_report(labels_list, preds_list))

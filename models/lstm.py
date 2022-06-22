@@ -1,12 +1,13 @@
 from struct import pack
 from turtle import forward
+from unicodedata import bidirectional
 import torch
 import torch.nn as nn
 import torch.functional as F
 from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
 
 class LSTM(nn.Module):
-    def __init__(self, vocab_size, emb_size, hidden_size, out_size):
+    def __init__(self, vocab_size, emb_size, hidden_size, out_size, embedding=None):
         """初始化参数：
             vocab_size:字典的大小
             emb_size:词向量的维数
@@ -14,15 +15,18 @@ class LSTM(nn.Module):
             out_size:标注的种类
         """
         super(LSTM, self).__init__()
-        self.embedding = nn.Embedding(vocab_size, emb_size)
-        self.lstm = nn.LSTM(emb_size, hidden_size, batch_first = True)
-        self.liner = nn.Linear(hidden_size, out_size)
+        if embedding is None:
+            self.embedding = nn.Embedding(vocab_size, emb_size)
+        else:
+            self.embedding = nn.Embedding.from_pretrained(embedding)
+        self.lstm = nn.LSTM(emb_size, hidden_size, bidirectional=True,num_layers=1)
+        self.liner = nn.Linear(2*hidden_size, out_size)
 
-    def forward(self, sents_tensor):
+    def forward(self, sents_tensor, lengths):
         emb = self.embedding(sents_tensor)
-        # packed = pack_padded_sequence(emb, lengths, batch_first=True)
-        out,(hn, cn) = self.lstm(emb)
-        # out,_ = pad_packed_sequence(out, batch_first=True)
+        packed = pack_padded_sequence(emb, lengths, batch_first=True)  # 将填充的部分pack，不参与计算
+        out,_ = self.lstm(packed)
+        out,_ = pad_packed_sequence(out, batch_first=True)  # 将填充的部分pad回tensor，进行计算
         scores = self.liner(out)
         return scores
     
