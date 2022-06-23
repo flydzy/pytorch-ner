@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 sn.set(style="darkgrid")
 
-from preprocess import build_iterator
+from Preprocess import build_iterator
 
 train_iter = build_iterator('data/en/eng.train', batch_size=32)
 valid_iter = build_iterator('data/en/eng.testa', batch_size=32)

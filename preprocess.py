@@ -1,8 +1,9 @@
-from posixpath import split
-from requests import delete
 from torchtext.legacy.data import Field, Example, Dataset, BucketIterator, Iterator
 from tqdm import tqdm
 import torch
+
+SENT = Field(sequential=True, tokenize=str.split, lower=True, batch_first=True, include_lengths=True) 
+LABEL = Field(sequential=True, tokenize=str.split, is_target=True, batch_first=True)
 
 # 对现有数据集做一个转换
 def preprocess(data_path):
@@ -45,24 +46,25 @@ def preprocess(data_path):
     return sents, labels                
 
 # 代入到torchtext中
-def build_dataset(sents, labels):
+def build_dataset(filepath):
     """
     param sents: 句子列表
     param labels: 标签列表
     return: torchtext的Example对象
     """
     # 创建Field
-    SENT = Field(sequential=True, tokenize=str.split, lower=False, batch_first=True, include_lengths=True)
-    LABEL = Field(sequential=True, tokenize=str.split, is_target=True, batch_first=True)
+    # include_lengths=True 表示最终返回的是一个tuple，第一个是句子，第二个是句子长度
+    
     # 创建Example
+    sents, labels = preprocess(filepath)
     fields = [('sent', SENT), ('label', LABEL)]
     examples = []
     for sent, label in zip(sents, labels):
         example = Example.fromlist([sent, label], fields)
         examples.append(example)
 
-    SENT.build_vocab([example.sent for example in examples], vectors='glove.6B.50d')
-    LABEL.build_vocab([example.label for example in examples])
+    # SENT.build_vocab([example.sent for example in examples], vectors='glove.6B.50d')
+    # LABEL.build_vocab([example.label for example in examples], sorted=True)
     dataste = Dataset(examples, fields)
     return dataste
 
@@ -77,18 +79,19 @@ def build_iterator(file_path,  batch_size, device):
     dataset = build_dataset(sents, labels)
 
     iterator = BucketIterator(
-        dataset, 
-        batch_size=batch_size, 
-        device=device, 
-        repeat=False, 
-        sort_key=lambda x: len(x.sent), 
+        dataset,
+        batch_size=batch_size,
+        device=device,
+        repeat=False,
+        shuffle=True,
+        sort_key=lambda x: len(x.sent),
         sort_within_batch=True,
         )
-    return iterator
+    return dataset,iterator
 
 if __name__ == '__main__':
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    data_iter = build_iterator('test.txt', batch_size=4, device=device)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    dataset, data_iter = build_iterator('data/en/eng.train', batch_size=4, device=device)
     label2idx = data_iter.dataset.fields['label'].vocab.stoi
     print(label2idx)
     for i, batch in enumerate(data_iter):
