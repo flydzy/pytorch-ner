@@ -1,47 +1,45 @@
 import sys
 sys.path.append(r'..')
-from Advtrans.preprocess.preprocess import build_iterator
-from Advtrans.models.crf import CRFModel, word2features, sent2features
+from Advtrans.preprocess import build_dataset
+from Advtrans.models.crf import CRFModel
 
-train_iter = build_iterator('data/en/eng.train', batch_size=32)
-valid_iter = build_iterator('data/en/eng.testa', batch_size=32)
-test_iter = build_iterator('data/en/eng.testb', batch_size=32)
+from sklearn.metrics import classification_report, precision_recall_fscore_support
 
+en_dataset = build_dataset(train_path=r"data/en/eng.train", valid_path=r"data/en/eng.testa", test_path=r"data/en/eng.testb")
 
-def getOriginData(data_iter, part=1):
-    sents = []
-    labels = []
-    for batch in data_iter:
-        sents.extend([example.sent for example in batch.dataset.examples])
-        labels.extend([example.label for example in batch.dataset.examples])
-    return sents[:int(len(sents)*part)], labels[:int(len(labels)*part)]
+# Get Origin Sentence and Label
+origin_dataset = {}
+for key in en_dataset:
+    train_sents = [example.sent for example in en_dataset[key].examples]
+    train_labels = [example.label for example in en_dataset[key].examples]
+    origin_dataset[key] = (train_sents, train_labels)
 
-# 获取原始数据并展开
-dataset = {}
-dataset['train'] = getOriginData(train_iter,part=0.01)
-dataset['valid'] = getOriginData(valid_iter,part=0.01)
-dataset['test'] = getOriginData(test_iter,part=0.01)
+# load model
+id2tags = en_dataset['train'].fields['label'].vocab.itos
+tag2ids = en_dataset['train'].fields['label'].vocab.stoi  # N : num class for hmm
+word2ids = en_dataset['train'].fields['sent'].vocab.stoi  # M : size of vocab for hmm
 
-# 运用CRF模型训练
-print("Training CRF...")
-model = CRFModel()
-model.train(dataset['train'][0], dataset['train'][1])
-# 评估模型
-def accuracy(pred_list, tag_list):
-    correct = 0
-    allcount = 0
-    for i in range(len(pred_list)):
-        for j in range(len(pred_list[i])):
-            if pred_list[i][j] == tag_list[i][j]:
-                correct += 1
-        allcount += len(pred_list[i])
-    return correct / allcount
-
+hmm = CRFModel()
+hmm.train(origin_dataset['train'][0], origin_dataset['train'][1])
 print("Training finished")
-pred_list = model.test(dataset['valid'][0])
-print("Eval Accuracy: {}".format(accuracy(pred_list, dataset['valid'][1])))
 
-# 测试集测试
-pred_list = model.test(dataset['test'][0])
-print("Test Accuracy: {}".format(accuracy(pred_list, dataset['test'][1])))
+# validate
+def accuracy(pred, gold):
+    # flat prediction and gold label
+    pred_flat = []
+    gold_flat = []
+    for i in range(len(pred)):
+        for j in range(len(pred[i])):
+            pred_flat.append(pred[i][j])
+            gold_flat.append(gold[i][j])
+    return classification_report(gold_flat, pred_flat)
 
+
+valid_pred_list = hmm.test(origin_dataset['valid'][0])
+print("Valid Score:")
+print(accuracy(valid_pred_list, origin_dataset['valid'][1]))
+
+
+test_pred_list = hmm.test(origin_dataset['test'][0])
+print("Test Score:")
+print(accuracy(test_pred_list, origin_dataset['test'][1]))

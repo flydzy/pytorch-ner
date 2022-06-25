@@ -16,12 +16,12 @@ class LSTM(nn.Module):
             self.embedding = nn.Embedding(vocab_size, emb_size)
         else:
             self.embedding = nn.Embedding.from_pretrained(embedding)
-        self.lstm = nn.LSTM(emb_size, hidden_size, bidirectional=True, num_layers=1)
+        self.lstm = nn.LSTM(emb_size, hidden_size)
 
         # 训练集效果很好，但是验证集效果差，加入dropout层
         self.dropout = nn.Dropout(p = 0.5)
 
-        self.liner = nn.Linear(2*hidden_size, out_size)
+        self.liner = nn.Linear(hidden_size, out_size)
 
     def forward(self, sents_tensor, lengths):
         emb = self.embedding(sents_tensor)
