@@ -5,7 +5,7 @@ import torch.functional as F
 from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
 
 class LSTM(nn.Module):
-    def __init__(self, vocab_size, emb_size, hidden_size, out_size, isbidirection = False, embedding=None):
+    def __init__(self, vocab_size, emb_size, hidden_size, out_size, is_bidirectional = False, embedding=None):
         """初始化参数：
             vocab_size:字典的大小
             emb_size:词向量的维数
@@ -19,7 +19,7 @@ class LSTM(nn.Module):
             self.embedding = nn.Embedding.from_pretrained(embedding)
         
         # 是否是BiLSTM，默认是单向的
-        if isbidirection:
+        if is_bidirectional:
             self.lstm = nn.LSTM(emb_size, hidden_size, bidirectional=True, num_layers=2)
             self.dropout = nn.Dropout(p = 0.5)
             self.liner = nn.Linear(2 * hidden_size, out_size)
