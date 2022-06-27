@@ -52,7 +52,7 @@ for key in lang_dataset:
 
 data_iter = {}
 data_iter['train'] = BucketIterator(lang_dataset['train'], batch_size=args.batch_size, shuffle=True, sort_key=lambda x: len(x.sent), sort_within_batch=True, repeat=False)
-data_iter['valid'] = BucketIterator(lang_dataset['valid'], batch_size=args.batch_size, shuffle=True, sort_key=lambda x: len(x.sent), sort_within_batch=True, repeat=False)
+data_iter['dev'] = BucketIterator(lang_dataset['dev'], batch_size=args.batch_size, shuffle=True, sort_key=lambda x: len(x.sent), sort_within_batch=True, repeat=False)
 data_iter['test'] = BucketIterator(lang_dataset['test'], batch_size=args.batch_size, sort_key=lambda x: len(x.sent), sort_within_batch=True, repeat=False)
 
 

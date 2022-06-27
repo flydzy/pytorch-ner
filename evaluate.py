@@ -24,7 +24,7 @@ def hmm_train_eval(origin_dataset, model, word2idx, tag2idx, logger):
     model.train(origin_dataset['train'][0], origin_dataset['train'][1], word2idx, tag2idx)
     # evaluate
     train_result = model.test(origin_dataset['train'][0],word2id=word2idx, tag2id=tag2idx)
-    dev_result = model.test(origin_dataset['valid'][0],word2id=word2idx, tag2id=tag2idx)
+    dev_result = model.test(origin_dataset['dev'][0],word2id=word2idx, tag2id=tag2idx)
     test_result = model.test(origin_dataset['test'][0],word2id=word2idx, tag2id=tag2idx)
     # flatten the result
     train_result = [item for sublist in train_result for item in sublist]
@@ -43,7 +43,7 @@ def crf_train_eval(origin_dataset, model, logger):
     model.train(origin_dataset['train'][0], origin_dataset['train'][1])
     # evaluate
     train_result = model.test(origin_dataset['train'][0])
-    dev_result = model.test(origin_dataset['valid'][0])
+    dev_result = model.test(origin_dataset['dev'][0])
     test_result = model.test(origin_dataset['test'][0])
     # flatten the result
     train_result = [item for sublist in train_result for item in sublist]
@@ -91,7 +91,7 @@ def lstm_train_eval(dataiters, model, loss_function, optimizer, epoches, out_siz
         # evaluate each epoch
         with torch.no_grad():
             train_preds,train_labels = eval_of_bilstm(model, dataiters['train'], id2labels, out_size)
-            valid_preds,valid_labels = eval_of_bilstm(model, dataiters['valid'], id2labels, out_size)
+            valid_preds,valid_labels = eval_of_bilstm(model, dataiters['dev'], id2labels, out_size)
             test_preds,test_labels = eval_of_bilstm(model, dataiters['test'], id2labels, out_size)
             # output the result
             logger.info(precision_recall_fscore_support(train_labels, train_preds, average='macro'))
@@ -150,7 +150,7 @@ def lstm_crf_train_eval(dataiters, model, optimizer, epoches, id2labels ,logger)
         
         # evaluate each epoch
         train_preds,train_labels = eval_of_bilstm_crf(model, dataiters['train'], id2labels)
-        valid_preds,valid_labels = eval_of_bilstm_crf(model, dataiters['valid'],id2labels)
+        valid_preds,valid_labels = eval_of_bilstm_crf(model, dataiters['dev'],id2labels)
         test_preds,test_labels = eval_of_bilstm_crf(model, dataiters['test'],id2labels)
         # output the result
         logger.info(precision_recall_fscore_support(train_labels, train_preds, average='macro'))
