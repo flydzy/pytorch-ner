@@ -17,6 +17,7 @@ categories = {
     'I-LOC': 6,
     'B-MISC': 7,
     'I-MISC': 8,
+    'special': 9,
     0: 'O',
     1: 'B-PER',
     2: 'I-PER',
@@ -25,7 +26,8 @@ categories = {
     5: 'B-LOC',
     6: 'I-LOC',
     7: 'B-MISC',
-    8: 'I-MISC'
+    8: 'I-MISC',
+    9: 'special'
 }
 
 
@@ -84,11 +86,22 @@ def collate_fn(examples):
         aligned_labels = []
         for word_idx in tokenized_input.word_ids(batch_index=i):
             if word_idx is None:
-                aligned_labels.append(-100)
+                aligned_labels.append(9)
             else:
                 aligned_labels.append(labels[word_idx])
         targets.append(aligned_labels)
+    targets = torch.tensor(targets)
     return tokenized_input, targets
+
+def build_iterators(data_path, batch_size, shuffle=True):
+    """
+    Build iterators for training and validation.
+    """
+    data = load_sentence_tags(data_path)
+    dataset = ConllDataset(data)
+    iterator = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle,collate_fn=collate_fn)
+    return iterator
+
 
 if __name__ == '__main__':
     data_path = 'data/en/train.txt'

@@ -2,3 +2,4 @@ torchtext==0.10
 seaborn
 transformers
 sklearn
+torchcrf
